@@ -1,0 +1,19 @@
+{
+  "name": "unreal-mcp-server",
+  "version": "1.0.0",
+  "description": "A Model Context Protocol server for Smithery",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18 <21"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "keywords": ["mcp", "model-context-protocol", "smithery"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0"
+  }
+}
