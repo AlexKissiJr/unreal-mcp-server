@@ -1,25 +1,46 @@
 {
-  "name": "unreal-mcp-server",
+  "name": "@unreal/mcp-server",
   "version": "1.0.0",
-  "description": "A Model Context Protocol server for Smithery",
-  "main": "src/index.js",
+  "description": "MCP Server for Unreal Engine integration",
   "type": "module",
-  "engines": {
-    "node": ">=18 <21"
-  },
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node src/index.js",
-    "test": "node src/health.js",
-    "healthcheck": "node src/health.js",
-    "diagnose": "node src/diagnose.js",
-    "tools-test": "node src/test-client.js",
-    "tcp-test": "node src/test-tcp-client.js"
+    "test": "node src/test-tcp-client.js",
+    "dev": "nodemon src/index.js"
   },
-  "keywords": ["mcp", "model-context-protocol", "smithery", "unreal-engine"],
-  "author": "",
+  "keywords": [
+    "mcp",
+    "unreal",
+    "server",
+    "smithery"
+  ],
+  "author": "Alex Kissi Jr",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.7.0"
+    "debug": "^4.3.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "smithery": {
+    "type": "server",
+    "transport": {
+      "type": "tcp",
+      "port": 13378
+    },
+    "tools": [
+      "echo",
+      "get_time",
+      "unreal_info",
+      "server_status"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexkissijr/unreal-mcp-server.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

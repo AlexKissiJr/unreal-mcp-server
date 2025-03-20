@@ -8,7 +8,7 @@ import logger from './logger.js';
 import connectionManager from './connection-manager.js';
 
 class TcpServerTransport {
-  constructor(port = 13378) { // Using 13378 instead of 13377 to avoid conflict with UnrealMCP
+  constructor(port = 13378) {
     this.port = port;
     this.server = null;
     this.onMessage = null;
@@ -21,6 +21,7 @@ class TcpServerTransport {
       try {
         this.server = net.createServer((socket) => {
           const clientId = connectionManager.addConnection(socket);
+          logger.info(`Client ${clientId} connected from ${socket.remoteAddress}:${socket.remotePort}`);
           
           let buffer = '';
           
@@ -38,49 +39,69 @@ class TcpServerTransport {
                 if (this.onMessage) {
                   this.onMessage(parsed).then(response => {
                     if (response) {
-                      socket.write(JSON.stringify(response) + '\n');
+                      const responseStr = JSON.stringify(response) + '\n';
+                      socket.write(responseStr);
+                      logger.debug(`Sent response to client ${clientId}:`, response);
                     }
                   }).catch(error => {
-                    logger.error(`Error processing message from client ${clientId}: ${error.message}`);
-                    socket.write(JSON.stringify({ 
+                    logger.error(`Error processing message from client ${clientId}:`, error);
+                    const errorResponse = {
                       jsonrpc: '2.0',
                       id: parsed.id,
                       error: {
                         code: -32000,
-                        message: error.message
+                        message: error.message || 'Internal error'
                       }
-                    }) + '\n');
+                    };
+                    socket.write(JSON.stringify(errorResponse) + '\n');
                   });
                 }
               } catch (error) {
-                logger.error(`Invalid JSON from client ${clientId}: ${error.message}`);
-                socket.write(JSON.stringify({ 
+                logger.error(`Invalid JSON from client ${clientId}:`, error);
+                const errorResponse = {
                   jsonrpc: '2.0',
                   id: null,
                   error: {
                     code: -32700,
                     message: 'Parse error'
                   }
-                }) + '\n');
+                };
+                socket.write(JSON.stringify(errorResponse) + '\n');
               }
             }
           });
           
           socket.on('error', (error) => {
-            logger.error(`Socket error for client ${clientId}: ${error.message}`);
+            logger.error(`Socket error for client ${clientId}:`, error);
           });
           
           socket.on('close', () => {
             logger.info(`Client ${clientId} disconnected`);
             connectionManager.removeConnection(clientId);
           });
+
+          // Send initial connection success message
+          const initMessage = {
+            jsonrpc: '2.0',
+            method: 'connection_status',
+            params: {
+              status: 'connected',
+              client_id: clientId,
+              server_info: {
+                version: '1.0.0',
+                transport: 'tcp',
+                port: this.port
+              }
+            }
+          };
+          socket.write(JSON.stringify(initMessage) + '\n');
         });
         
         this.server.on('error', (error) => {
           if (error.code === 'EADDRINUSE') {
-            logger.error(`Port ${this.port} is already in use. Please choose a different port.`);
+            logger.error(`Port ${this.port} is already in use`);
           } else {
-            logger.error(`Server error: ${error.message}`);
+            logger.error('Server error:', error);
           }
           reject(error);
         });
@@ -92,7 +113,7 @@ class TcpServerTransport {
         });
         
       } catch (error) {
-        logger.error(`Failed to start TCP server: ${error.message}`);
+        logger.error('Failed to start TCP server:', error);
         reject(error);
       }
     });
@@ -110,7 +131,7 @@ class TcpServerTransport {
       try {
         connection.socket.write(messageStr);
       } catch (error) {
-        logger.error(`Failed to send message to client ${connection.id}: ${error.message}`);
+        logger.error(`Failed to send message to client ${connection.id}:`, error);
       }
     }
   }
@@ -119,6 +140,15 @@ class TcpServerTransport {
   async disconnect() {
     return new Promise((resolve) => {
       if (this.server) {
+        // Close all client connections first
+        for (const connection of connectionManager.getConnections()) {
+          try {
+            connection.socket.end();
+          } catch (error) {
+            logger.error(`Error closing client ${connection.id} connection:`, error);
+          }
+        }
+
         this.server.close(() => {
           this.isConnected = false;
           logger.info('TCP server closed');

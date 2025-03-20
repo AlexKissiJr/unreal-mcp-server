@@ -1,42 +1,69 @@
-schemaVersion: "1.0.0"
-configSchema:
-  type: object
-  properties:
-    debug:
-      type: boolean
-      description: "Enable debug logging for the server"
-      default: false
-    healthCheckInterval:
-      type: number
-      description: "Interval in seconds between health checks (0 to disable)"
-      default: 60
-    port:
-      type: number
-      description: "Port for the TCP server (default: 13378)"
-      default: 13378
-startCommand:
-  function:
-    body: |
-      const { debug, healthCheckInterval, port } = config;
-      
-      const env = {
-        ...process.env,
-      };
-      
-      if (debug) {
-        env.DEBUG = 'true';
-      }
-      
-      if (healthCheckInterval > 0) {
-        env.HEALTH_CHECK_INTERVAL = healthCheckInterval.toString();
-      }
-      
-      if (port) {
-        env.PORT = port.toString();
-      }
-      
-      return {
-        command: "node",
-        args: ["src/index.js"],
-        env,
-      }; 
+name: "@unreal/mcp-server"
+version: "1.0.0"
+description: "MCP Server for Unreal Engine integration, providing tools for engine information and server status"
+author: "Alex Kissi Jr"
+license: "MIT"
+
+transport:
+  type: "tcp"
+  port: 13378
+
+categories:
+  - unreal
+  - utility
+  - system
+
+tools:
+  echo:
+    name: "echo"
+    description: "Echoes back the input text"
+    category: "utility"
+    version: "1.0.0"
+    schema:
+      type: "object"
+      properties:
+        text:
+          type: "string"
+          description: "The text to echo back"
+      required: ["text"]
+
+  get_time:
+    name: "get_time"
+    description: "Returns the current time in various formats"
+    category: "utility"
+    version: "1.0.0"
+    schema:
+      type: "object"
+      properties:
+        format:
+          type: "string"
+          description: "The format to return the time in"
+          enum: ["iso", "unix", "human"]
+          default: "iso"
+
+  unreal_info:
+    name: "unreal_info"
+    description: "Returns information about the Unreal Engine integration"
+    category: "unreal"
+    version: "1.0.0"
+    schema:
+      type: "object"
+      properties:
+        detail:
+          type: "string"
+          description: "The type of information to return"
+          enum: ["version", "system", "connectivity", "all"]
+          default: "all"
+
+  server_status:
+    name: "server_status"
+    description: "Returns the current server status and health metrics"
+    category: "system"
+    version: "1.0.0"
+    schema:
+      type: "object"
+      properties:
+        include_memory:
+          type: "boolean"
+          description: "Whether to include memory usage information"
+          default: false 

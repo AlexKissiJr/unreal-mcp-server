@@ -8,42 +8,46 @@ import logger from './utils/logger.js';
 import connectionManager from './utils/connection-manager.js';
 import TcpServerTransport from './utils/tcp-transport.js';
 
-// Safe handler wrapper for tool handlers to prevent server crashes
-const safeHandler = (handler) => {
-  return async (params) => {
-    try {
-      return await handler(params);
-    } catch (error) {
-      logger.error('Tool handler error:', error);
-      throw error;
-    }
-  };
-};
-
-// Tool definitions
+// Tool definitions with Smithery-compatible metadata
 const tools = {
   echo: {
+    name: 'echo',
+    description: 'Echoes back the input text',
+    version: '1.0.0',
+    category: 'utility',
     schema: {
       type: 'object',
       properties: {
-        text: { type: 'string' }
+        text: { 
+          type: 'string',
+          description: 'The text to echo back'
+        }
       },
       required: ['text']
     },
-    handler: safeHandler(async ({ text }) => {
+    handler: async ({ text }) => {
       logger.debug('Echo tool called with:', { text });
       return { text };
-    })
+    }
   },
   
   get_time: {
+    name: 'get_time',
+    description: 'Returns the current time in various formats',
+    version: '1.0.0',
+    category: 'utility',
     schema: {
       type: 'object',
       properties: {
-        format: { type: 'string', enum: ['iso', 'unix', 'human'] }
+        format: { 
+          type: 'string',
+          description: 'The format to return the time in',
+          enum: ['iso', 'unix', 'human'],
+          default: 'iso'
+        }
       }
     },
-    handler: safeHandler(async ({ format = 'iso' }) => {
+    handler: async ({ format = 'iso' }) => {
       const now = new Date();
       switch (format) {
         case 'unix':
@@ -53,18 +57,28 @@ const tools = {
         default:
           return { time: now.toISOString() };
       }
-    })
+    }
   },
   
   unreal_info: {
+    name: 'unreal_info',
+    description: 'Returns information about the Unreal Engine integration',
+    version: '1.0.0',
+    category: 'unreal',
     schema: {
       type: 'object',
       properties: {
-        detail: { type: 'string', enum: ['version', 'system', 'connectivity', 'all'] }
+        detail: { 
+          type: 'string',
+          description: 'The type of information to return',
+          enum: ['version', 'system', 'connectivity', 'all'],
+          default: 'all'
+        }
       }
     },
-    handler: safeHandler(async ({ detail = 'all' }) => {
+    handler: async ({ detail = 'all' }) => {
       const info = {
+        name: 'Unreal MCP Server',
         version: '5.3',
         system: process.platform,
         connectivity: {
@@ -78,32 +92,47 @@ const tools = {
         return info;
       }
       return { [detail]: info[detail] };
-    })
+    }
   },
   
   server_status: {
+    name: 'server_status',
+    description: 'Returns the current server status and health metrics',
+    version: '1.0.0',
+    category: 'system',
     schema: {
       type: 'object',
       properties: {
-        include_memory: { type: 'boolean' }
+        include_memory: { 
+          type: 'boolean',
+          description: 'Whether to include memory usage information',
+          default: false
+        }
       }
     },
-    handler: safeHandler(async ({ include_memory = false }) => {
+    handler: async ({ include_memory = false }) => {
       const status = {
+        name: 'Unreal MCP Server',
+        status: 'running',
         uptime: Math.floor(process.uptime()),
-        active_connections: connectionManager.getConnectionCount()
+        active_connections: connectionManager.getConnectionCount(),
+        transport: {
+          type: 'tcp',
+          port: 13378
+        }
       };
 
       if (include_memory) {
         const memoryUsage = process.memoryUsage();
         status.memory = {
           heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + 'MB',
-          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + 'MB'
+          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + 'MB',
+          rss: Math.round(memoryUsage.rss / 1024 / 1024) + 'MB'
         };
       }
 
       return status;
-    })
+    }
   }
 };
 
@@ -122,10 +151,9 @@ const handleRequest = async (request) => {
     throw new Error(`Unknown method: ${request.method}`);
   }
 
-  // Validate params against schema if provided
+  // Validate params against schema
+  const params = request.params || {};
   if (tool.schema) {
-    // Basic schema validation
-    const params = request.params || {};
     if (tool.schema.required) {
       for (const required of tool.schema.required) {
         if (!(required in params)) {
@@ -135,41 +163,52 @@ const handleRequest = async (request) => {
     }
   }
 
-  const result = await tool.handler(request.params || {});
-  return {
-    jsonrpc: '2.0',
-    id: request.id,
-    result
-  };
+  try {
+    const result = await tool.handler(params);
+    return {
+      jsonrpc: '2.0',
+      id: request.id,
+      result
+    };
+  } catch (error) {
+    logger.error('Tool handler error:', error);
+    return {
+      jsonrpc: '2.0',
+      id: request.id,
+      error: {
+        code: -32000,
+        message: error.message
+      }
+    };
+  }
 };
 
-// Keep server alive and provide status updates
-const setupMonitoring = () => {
+// Setup monitoring functions
+function setupMonitoring() {
   // Start health checks
-  startHealthChecks(60);
+  startHealthChecks();
 
-  // Log active connections every minute
+  // Log active connections periodically
   setInterval(() => {
     const count = connectionManager.getConnectionCount();
-    logger.info(`Active connections: ${count}`);
+    logger.debug(`Active connections: ${count}`);
   }, 60000);
-};
 
-// Prevent unhandled promise rejections from crashing application
+  // Log keep-alive message
+  setInterval(() => {
+    logger.debug('Server is running');
+  }, 300000);
+}
+
+// Handle unhandled promise rejections
 process.on('unhandledRejection', (error) => {
   logger.error('Unhandled promise rejection:', error);
 });
 
-// Handle SIGTERM without exiting (for graceful shutdown in containers)
-process.on('SIGTERM', async () => {
-  logger.info('Received SIGTERM signal, shutting down...');
-  try {
-    await server.disconnect();
-    process.exit(0);
-  } catch (error) {
-    logger.error('Error during shutdown:', error);
-    process.exit(1);
-  }
+// Handle SIGTERM
+process.on('SIGTERM', () => {
+  logger.info('Received SIGTERM signal');
+  process.exit(0);
 });
 
 // Main function to start the server
@@ -177,35 +216,18 @@ async function main() {
   logger.start();
   
   try {
-    // Initialize server with proper error handling
-    try {
-      const transport = new TcpServerTransport();
-      
-      // Set message handler
-      transport.setMessageHandler(handleRequest);
-      
-      // Connect with the transport but don't exit on error
-      logger.info('Starting TCP server...');
-      
-      await transport.connect().catch(error => {
-        logger.error(`Connection error: ${error.message}`);
-        logger.info('Server will continue running despite connection issue.');
-        // No process.exit() here to keep server alive
-      });
-      
-      logger.info('MCP server started and ready for connections');
-      
-      // Setup monitoring
-      setupMonitoring();
-      
-    } catch (error) {
-      logger.error(`Error starting server: ${error.message}`);
-      logger.info('Attempting to continue operation...');
-      setupMonitoring();
-    }
+    const transport = new TcpServerTransport();
+    transport.setMessageHandler(handleRequest);
+    
+    await transport.connect();
+    logger.info('MCP server started and ready for connections');
+    
+    // Setup monitoring
+    setupMonitoring();
+    
   } catch (error) {
     logger.error(`Failed to initialize server: ${error.message}`);
-    logger.error('Server cannot start without proper initialization.');
+    process.exit(1);
   }
 }
 
