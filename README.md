@@ -1,5 +1,7 @@
 # Model Context Protocol Server for Smithery
 
+[![smithery badge](https://smithery.ai/badge/@AlexKissiJr/unreal-mcp-server)](https://smithery.ai/server/@AlexKissiJr/unreal-mcp-server)
+
 This is a robust Model Context Protocol (MCP) server designed to be deployed on Smithery. It's specifically configured for integration with Unreal Engine applications via the UnrealMCP plugin.
 
 ## Features
