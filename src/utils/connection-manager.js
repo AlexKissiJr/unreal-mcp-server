@@ -3,8 +3,8 @@
  * Tracks active client connections and provides connection status
  */
 
-const EventEmitter = require('events');
-const logger = require('./logger');
+import { EventEmitter } from 'events';
+import logger from './logger.js';
 
 class ConnectionManager extends EventEmitter {
   constructor() {
@@ -81,4 +81,4 @@ class ConnectionManager extends EventEmitter {
   }
 }
 
-module.exports = new ConnectionManager(); 
+export default new ConnectionManager(); 

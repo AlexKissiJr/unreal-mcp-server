@@ -3,9 +3,9 @@
  * Handles TCP connections and message passing
  */
 
-const net = require('net');
-const logger = require('./logger');
-const connectionManager = require('./connection-manager');
+import net from 'net';
+import logger from './logger.js';
+import connectionManager from './connection-manager.js';
 
 class TcpServerTransport {
   constructor(port = 13378) { // Using 13378 instead of 13377 to avoid conflict with UnrealMCP
@@ -42,18 +42,37 @@ class TcpServerTransport {
                     }
                   }).catch(error => {
                     logger.error(`Error processing message from client ${clientId}: ${error.message}`);
-                    socket.write(JSON.stringify({ error: error.message }) + '\n');
+                    socket.write(JSON.stringify({ 
+                      jsonrpc: '2.0',
+                      id: parsed.id,
+                      error: {
+                        code: -32000,
+                        message: error.message
+                      }
+                    }) + '\n');
                   });
                 }
               } catch (error) {
                 logger.error(`Invalid JSON from client ${clientId}: ${error.message}`);
-                socket.write(JSON.stringify({ error: 'Invalid JSON message' }) + '\n');
+                socket.write(JSON.stringify({ 
+                  jsonrpc: '2.0',
+                  id: null,
+                  error: {
+                    code: -32700,
+                    message: 'Parse error'
+                  }
+                }) + '\n');
               }
             }
           });
           
           socket.on('error', (error) => {
             logger.error(`Socket error for client ${clientId}: ${error.message}`);
+          });
+          
+          socket.on('close', () => {
+            logger.info(`Client ${clientId} disconnected`);
+            connectionManager.removeConnection(clientId);
           });
         });
         
@@ -112,4 +131,4 @@ class TcpServerTransport {
   }
 }
 
-module.exports = TcpServerTransport; 
+export default TcpServerTransport; 

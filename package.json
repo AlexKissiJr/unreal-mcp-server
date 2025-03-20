@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A Model Context Protocol server for Smithery",
   "main": "src/index.js",
+  "type": "module",
   "engines": {
     "node": ">=18 <21"
   },
@@ -19,6 +20,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.7.0"
+    "@modelcontextprotocol/sdk": "1.7.0"
   }
 }
