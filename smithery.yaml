@@ -10,10 +10,14 @@ configSchema:
       type: number
       description: "Interval in seconds between health checks (0 to disable)"
       default: 60
+    port:
+      type: number
+      description: "Port for the TCP server (default: 13378)"
+      default: 13378
 startCommand:
   function:
     body: |
-      const { debug, healthCheckInterval } = config;
+      const { debug, healthCheckInterval, port } = config;
       
       const env = {
         ...process.env,
@@ -25,6 +29,10 @@ startCommand:
       
       if (healthCheckInterval > 0) {
         env.HEALTH_CHECK_INTERVAL = healthCheckInterval.toString();
+      }
+      
+      if (port) {
+        env.PORT = port.toString();
       }
       
       return {

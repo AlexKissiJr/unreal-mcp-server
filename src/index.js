@@ -20,6 +20,10 @@ const { checkHealth } = require('./health');
 // Import logger utility
 const logger = require('./utils/logger');
 
+// Import utilities
+const connectionManager = require('./utils/connection-manager');
+const TcpServerTransport = require('./utils/tcp-transport');
+
 // Safe handler wrapper for tool handlers to prevent server crashes
 const safeHandler = (handler) => {
   return async (inputs, context) => {
@@ -92,6 +96,11 @@ const serverStatusTool = {
         type: 'boolean',
         description: 'Include memory usage in the status report',
         default: false
+      },
+      includeConnections: {
+        type: 'boolean',
+        description: 'Include client connection information',
+        default: true
       }
     }
   }
@@ -129,8 +138,10 @@ const unrealInfo = safeHandler(async (inputs) => {
       architecture: process.arch
     },
     connectivity: {
-      status: 'online',
-      transport: 'stdio',
+      status: connectionManager.hasConnections() ? 'online' : 'waiting',
+      transport: 'tcp',
+      port: process.env.PORT || 13378,
+      activeConnections: connectionManager.getConnectionCount(),
       timestamp: new Date().toISOString()
     }
   };
@@ -150,15 +161,21 @@ const unrealInfo = safeHandler(async (inputs) => {
 
 const serverStatus = safeHandler(async (inputs) => {
   const status = {
-    status: 'running',
+    status: connectionManager.hasConnections() ? 'connected' : 'waiting',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    transport: 'stdio',
-    node_version: process.version
+    transport: 'tcp',
+    port: process.env.PORT || 13378,
+    node_version: process.version,
+    activeConnections: connectionManager.getConnectionCount()
   };
   
   if (inputs.includeMemory) {
     status.memory = process.memoryUsage();
+  }
+  
+  if (inputs.includeConnections) {
+    status.connections = connectionManager.getConnections();
   }
   
   return { result: status };
@@ -191,6 +208,13 @@ const setupMonitoring = () => {
     setInterval(() => {
       logger.debug('Running periodic health check');
       checkHealth();
+      
+      // Log connection status
+      const status = connectionManager.getStatus();
+      logger.debug(`Active connections: ${status.activeConnections}`);
+      if (status.activeConnections > 0) {
+        logger.debug('Connected clients:', status.connections);
+      }
     }, statusInterval);
   }
   
@@ -198,6 +222,15 @@ const setupMonitoring = () => {
   setInterval(() => {
     logger.debug('Server still running...');
   }, 60000); // Log every minute
+  
+  // Listen for connection events
+  connectionManager.on('connection', (connection) => {
+    logger.info(`Client connected: ${connection.address}:${connection.port}`);
+  });
+  
+  connectionManager.on('disconnection', (connection) => {
+    logger.info(`Client disconnected: ${connection.address}:${connection.port}`);
+  });
 };
 
 // Prevent unhandled promise rejections from crashing application
@@ -218,7 +251,7 @@ async function main() {
   
   try {
     const sdk = await importSDK();
-    const { McpServer, McpToolRegistry, StdioServerTransport } = sdk;
+    const { McpServer, McpToolRegistry } = sdk;
     
     // Create tool registry and register tools
     const toolRegistry = new McpToolRegistry();
@@ -232,18 +265,23 @@ async function main() {
     // Initialize server with proper error handling
     try {
       const server = new McpServer(toolRegistry);
-      const transport = new StdioServerTransport();
+      const transport = new TcpServerTransport(process.env.PORT || 13378);
       
       // Connect with the transport but don't exit on error
-      logger.info('Connecting to transport...');
+      logger.info('Starting TCP server...');
       
-      await server.connect(transport).catch(error => {
+      await transport.connect().catch(error => {
         logger.error(`Connection error: ${error.message}`);
         logger.info('Server will continue running despite connection issue.');
         // No process.exit() here to keep server alive
       });
       
-      logger.connected();
+      await server.connect(transport).catch(error => {
+        logger.error(`MCP server error: ${error.message}`);
+        logger.info('Server will continue running despite connection issue.');
+      });
+      
+      logger.info('MCP server started and ready for connections');
       
       // Setup monitoring
       setupMonitoring();

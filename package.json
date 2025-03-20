@@ -12,7 +12,8 @@
     "test": "node src/health.js",
     "healthcheck": "node src/health.js",
     "diagnose": "node src/diagnose.js",
-    "tools-test": "node src/test-client.js"
+    "tools-test": "node src/test-client.js",
+    "tcp-test": "node src/test-tcp-client.js"
   },
   "keywords": ["mcp", "model-context-protocol", "smithery", "unreal-engine"],
   "author": "",
