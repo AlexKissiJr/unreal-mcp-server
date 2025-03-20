@@ -1,7 +1,34 @@
+schemaVersion: "1.0.0"
+configSchema:
+  type: object
+  properties:
+    debug:
+      type: boolean
+      description: "Enable debug logging for the server"
+      default: false
+    healthCheckInterval:
+      type: number
+      description: "Interval in seconds between health checks (0 to disable)"
+      default: 60
 startCommand:
-  type: stdio
-  configSchema:
-    type: object
-    properties: {}
-  commandFunction: |-
-    (config) => ({ command: 'node', args: ['src/index.js'] }) 
+  function:
+    body: |
+      const { debug, healthCheckInterval } = config;
+      
+      const env = {
+        ...process.env,
+      };
+      
+      if (debug) {
+        env.DEBUG = 'true';
+      }
+      
+      if (healthCheckInterval > 0) {
+        env.HEALTH_CHECK_INTERVAL = healthCheckInterval.toString();
+      }
+      
+      return {
+        command: "node",
+        args: ["src/index.js"],
+        env,
+      }; 
